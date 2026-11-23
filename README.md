@@ -1,5 +1,6 @@
 # BCQuality for Azure DevOps
 
+[![tests](https://github.com/MattTraxinger/ADO-BCQuality-Linux/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/MattTraxinger/ADO-BCQuality-Linux/actions/workflows/tests.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 An Azure Pipelines template that reviews pull requests in Azure Repos with [BCQuality](https://github.com/microsoft/BCQuality), made to run on **Linux agents**. A Windows-agent version is at [ADO-BCQuality-Windows](https://github.com/MattTraxinger/ADO-BCQuality-Windows). It mirrors the division of labor in AL-Go for GitHub's Copilot code review ([microsoft/AL-Go#2402](https://github.com/microsoft/AL-Go/pull/2402)): BCQuality owns the AL expertise, this repo owns execution, permissions and publishing. It is a worked example, not part of BCQuality. A full Tier 2 review has run end to end on a test pull request; the remaining checks are listed at the end.
 
 ## How it works
