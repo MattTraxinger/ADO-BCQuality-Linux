@@ -1,0 +1,36 @@
+# Clones the pinned BCQuality release OUTSIDE the client checkout and records its commit.
+# Sets BCQ_ROOT and BCQ_COMMIT. Layers and disabled skills are applied per call by Invoke-BCQualityReview.ps1
+# through the task context. Disabled layers and knowledge allow/deny rules are applied here by deleting files from
+# this temporary clone (scripts/KnowledgePolicy.ps1) before the index is built, because BCQuality's own tools
+# do not enforce them.
+parameters:
+  - name: contextPath
+    type: string
+  - name: toolsDir
+    type: string
+
+steps:
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+      $ctx = Get-Content -LiteralPath '${{ parameters.contextPath }}' -Raw | ConvertFrom-Json -Depth 50
+      $root = Join-Path '$(Agent.TempDirectory)' 'bcquality'
+      # A repository in this Azure DevOps organization (an organization fork) is cloned with the build identity's token;
+      # any other host gets no credentials (scripts/BCQualityRepo.ps1). The token is mapped into this step only.
+      . '${{ parameters.toolsDir }}/scripts/BCQualityRepo.ps1'
+      $authenticated = Invoke-BCQualityClone -Repo $ctx.settings.BCQuality.repo -Version $ctx.settings.BCQuality.version -Root $root -CollectionUri '$(System.CollectionUri)' -Token $env:SYSTEM_ACCESSTOKEN
+      if ($authenticated) { Write-Host "Cloned $($ctx.settings.BCQuality.repo) with the build identity (same Azure DevOps organization)." }
+      # Prune knowledge to the target branch's allow/deny rules, then build knowledge-index.json over what is left.
+      # Entry expects the host to supply the index; the agent runs without a shell, so it is built here.
+      . '${{ parameters.toolsDir }}/scripts/KnowledgePolicy.ps1'
+      $knowledge = $ctx.settings.BCQuality.PSObject.Properties['knowledge']
+      # @(if ...) not `$x = if ... { @() }`: an if used as an expression unrolls an empty array to $null.
+      $allow = @(if ($knowledge) { $knowledge.Value.allow })
+      $deny = @(if ($knowledge) { $knowledge.Value.deny })
+      $null = Invoke-KnowledgePolicy -BCQualityRoot $root -EnabledLayers @($ctx.settings.BCQuality.enabledLayers) -Allow $allow -Deny $deny
+      $commit = (git -C $root rev-parse HEAD).Trim()
+      Write-Host "BCQuality v$($ctx.settings.BCQuality.version) at $commit"
+      Write-Host "##vso[task.setvariable variable=BCQ_ROOT]$root"
+      Write-Host "##vso[task.setvariable variable=BCQ_COMMIT]$commit"
+    displayName: Install pinned BCQuality
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)   # only for cloning a BCQuality fork in this organization; no AI secret in this step

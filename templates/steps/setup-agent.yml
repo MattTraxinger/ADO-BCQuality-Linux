@@ -1,0 +1,28 @@
+# Installs PowerShell 7.5+ if the image lacks it, then the exact CLI version pinned in package.json for the
+# provider chosen by the target branch's settings (bcqProvider, set from the Context job).
+parameters:
+  - name: toolsDir
+    type: string
+
+steps:
+  - pwsh: |
+      if ($PSVersionTable.PSVersion -lt [version]'7.5') {
+        dotnet tool install --global PowerShell --version 7.5.*
+        Write-Host '##vso[task.prependpath]$(HOME)/.dotnet/tools'
+      }
+    displayName: Ensure PowerShell 7.5+
+  - bash: |
+      set -euo pipefail
+      case "$(bcqProvider)" in
+        copilot)     package='@github/copilot' ;;
+        claude-code) package='@anthropic-ai/claude-code' ;;
+        *) echo "Unknown provider '$(bcqProvider)'." >&2; exit 1 ;;
+      esac
+      version=$(node -p "require('${{ parameters.toolsDir }}/package.json').dependencies['$package']")
+      if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "package.json must pin $package to an exact version, found '$version'." >&2
+        exit 1
+      fi
+      npm install --global --ignore-scripts=false "$package@$version"
+      echo "##vso[task.setvariable variable=AGENT_CLI_VERSION]$version"
+    displayName: Install pinned agent CLI ($(bcqProvider))
